@@ -10,7 +10,6 @@ interface Message {
 
 // Helper function to load initial state from sessionStorage
 function getInitialState(): { messages: Message[]; sessionId: string | null } {
-  // Guard for SSR (Server-Side Rendering)
   if (typeof window === 'undefined') {
     return { messages: [], sessionId: null };
   }
@@ -19,8 +18,6 @@ function getInitialState(): { messages: Message[]; sessionId: string | null } {
     const storedMessages = sessionStorage.getItem('initialMessages');
     const sessionId = sessionStorage.getItem('chatSessionId');
     
-    // Clear the initial messages so they don't load again on refresh
-    // We *keep* the chatSessionId
     if (storedMessages) {
       sessionStorage.removeItem('initialMessages'); 
       return {
@@ -32,13 +29,13 @@ function getInitialState(): { messages: Message[]; sessionId: string | null } {
     console.error('Failed to parse stored messages', error);
   }
   
-  // Default state if nothing is found (e.g., on page refresh)
+  // Default state if nothing is found (page refresh)
   return { messages: [], sessionId: sessionStorage.getItem('chatSessionId') };
 }
 
 export default function ChatPage() {
-  // Use the helper function for "lazy initialization"
-  // This runs only once when the component first loads
+  // Helper function for lazy initialization
+  // Runs on first component load only
   const [initialState] = useState(getInitialState);
   
   const [messages, setMessages] = useState<Message[]>(initialState.messages);
@@ -47,7 +44,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // This handles all SUBSEQUENT messages
+  // Handles all SUBSEQUENT messages
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim() || !sessionId) {
@@ -62,13 +59,12 @@ export default function ChatPage() {
     setInput('');
 
     try {
-      // Send as JSON, this is a "follow-up" message
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages,
-          sessionId: sessionId, // <-- Pass the existing session ID
+          sessionId: sessionId,
         }),
       });
 
@@ -76,14 +72,12 @@ export default function ChatPage() {
         throw new Error('Network response was not ok');
       }
 
-      // The API always returns the reply and session ID
       const data: { reply: string; sessionId: string } = await response.json();
 
       setMessages((prevMessages) => [
         ...prevMessages,
         { role: 'assistant', content: data.reply },
       ]);
-      // Just in case the session ID were to change (it shouldn't, but good practice)
       setSessionId(data.sessionId); 
       
     } catch (error) {
@@ -99,25 +93,13 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-screen bg-white text-gray-900">
-      {/* Header (Reverted to original) */}
+      {/* Header */}
       <header className="flex items-center p-4 bg-gray-100 border-b border-gray-200">
-        <a
-          href="https://www.bu.edu/mybu/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            src="/bu_logo.svg"
-            alt="Boston University Logo"
-            width={80}
-            height={25}
-            className="mr-4"
-          />
-        </a>
-        <h1 className="text-xl font-semibold text-gray-800">AI Schedule Planning Assistant</h1>
+        <Image src="/bu_logo.svg" alt="Boston University Logo" width={80} height={25} className="mr-4" />
+        <h1 className="text-xl font-semibold text-gray-800">Schedule Planning Assistant</h1>
       </header>
 
-      {/* Chat History (Reverted to original) */}
+      {/* Chat History */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
         {messages.map((msg, index) => (
           <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -127,6 +109,7 @@ export default function ChatPage() {
           </div>
         ))}
         
+        {/* Loading Indicator */}
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-gray-200 px-4 py-3 rounded-lg shadow-md text-gray-600">
@@ -136,25 +119,25 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Input Form (<<< UPDATED TO MATCH IMAGE >>>) */}
-      <footer className="p-4 bg-white border-t border-gray-200 flex justify-center"> {/* Changed background to white, centered form */}
-        <form onSubmit={handleSubmit} className="flex items-center w-full max-w-2xl px-4 py-2 bg-blue-100 rounded-full shadow-md"> {/* New container style */}
+      {/* Input Form (Styled to match image) */}
+      <footer className="p-4 bg-white border-t border-gray-200 flex justify-center">
+        <form onSubmit={handleSubmit} className="flex items-center w-full max-w-2xl px-4 py-2 bg-blue-100 rounded-full shadow-md">
           <input
             type="text"
             value={input}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
             placeholder="How can I help you?"
             disabled={isLoading}
-            className="flex-1 p-0 bg-transparent text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-0 border-none" // Input is transparent, borderless
+            className="flex-1 p-0 bg-transparent text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-0 border-none"
           />
           <button
             type="submit"
             disabled={isLoading || !sessionId}
-            className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 disabled:cursor-not-allowed" // New circular button style
+            className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5" // Smaller icon
+                className="h-5 w-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"

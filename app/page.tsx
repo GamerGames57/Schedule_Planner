@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 export default function LandingPage() {
-  const [transcriptFile, setTranscriptFile] = useState<File | null>(null);
-  const [chatInput, setChatInput] = useState<string>(''); // For landing page prompt
+  const [transcriptFile, setTranscriptFile] = useState<File | null>(null); 
+  const [chatInput, setChatInput] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string>('');
   const router = useRouter();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -15,14 +17,62 @@ export default function LandingPage() {
     }
   };
 
-  const handleSend = (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) => {
+  const handleSend = async (
+    e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>,
+  ) => {
     e.preventDefault();
-    if (transcriptFile && chatInput.trim()) { // Check presence of both file and input
-      console.log('Transcript uploaded:', transcriptFile.name);
-      console.log('Initial chat:', chatInput);
-      router.push('/chat'); // Switch to the chat page
-    } else {
-        alert('Please upload a transcript AND provide an initial request.');
+    if (!chatInput.trim()) {
+      alert('Please type an initial message.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError('');
+
+    try {
+      const payload = {
+        chatInput: chatInput,
+      };
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Server failed to process the request.';
+        try {
+          const errData = await response.json();
+          errorMessage = errData.error || 'Server error';
+        } catch (parseError) {
+          errorMessage = `Server Error: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json()
+
+      const initialMessages = [
+        { role: 'user', content: chatInput },
+        { role: 'assistant', content: data.reply },
+      ];
+
+      sessionStorage.setItem('initialMessages', JSON.stringify(initialMessages));
+      sessionStorage.setItem('chatSessionId', data.sessionId);
+
+      router.push('/chat');
+      
+    } catch (err: unknown) {
+      let errorMessage = 'An unknown error occurred. Please try again.';
+      if (err instanceof Error) {
+        errorMessage = `Error: ${err.message}. Please try again.`;
+      }
+      console.error('Failed to process or navigate:', err);
+      setError(errorMessage);
+      setIsProcessing(false);
     }
   };
 
@@ -30,6 +80,7 @@ export default function LandingPage() {
     <div className="flex flex-col items-center justify-center h-screen bg-white text-gray-900 p-4">
       {/* BU Logo and Title */}
       <div className="absolute top-4 left-4">
+        {/* Logo is 1.5x size AND a hyperlink */}
         <a
           href="https://www.bu.edu/mybu/"
           target="_blank"
@@ -38,8 +89,8 @@ export default function LandingPage() {
           <Image
             src="/bu_logo.svg"
             alt="Boston University Logo"
-            width={180}
-            height={60}
+            width={180} // 1.5x size
+            height={60} // 1.5x size
           />
         </a>
       </div>
@@ -49,10 +100,12 @@ export default function LandingPage() {
 
       {/* Main Content Area */}
       <div className="flex flex-col md:flex-row items-center gap-8 w-full max-w-4xl px-4">
-        {/* Upload Transcript Button */}
+        {/* Upload Transcript Button (Visual Only) */}
         <label
           htmlFor="transcript-upload"
-          className="flex flex-col items-center justify-center w-full md:w-1/3 p-10 bg-red-600 text-white rounded-lg shadow-lg cursor-pointer hover:bg-red-700 transition-colors"
+          className={`flex flex-col items-center justify-center w-full md:w-1/3 p-10 bg-red-600 text-white rounded-lg shadow-lg cursor-pointer transition-colors ${
+            isProcessing ? 'opacity-50' : 'hover:bg-red-700'
+          }`}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -72,9 +125,10 @@ export default function LandingPage() {
           <input
             id="transcript-upload"
             type="file"
-            accept=".pdf,.doc,.docx,.txt" // Accepted transcript file types
+            accept=".pdf,.txt"
             onChange={handleFileChange}
             className="hidden"
+            disabled={isProcessing}
           />
           {transcriptFile && (
             <p className="mt-2 text-sm text-gray-200">{transcriptFile.name}</p>
@@ -94,11 +148,17 @@ export default function LandingPage() {
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder="How can I help you?"
                     className="flex-1 p-3 pr-12 bg-blue-100 text-gray-800 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-300 placeholder-gray-500"
+                    disabled={isProcessing}
                 />
                 <button
                     type="submit"
-                    className="absolute right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300"
+                    className="absolute right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isProcessing}
                 >
+                  {/* Loading spinner logic */}
+                  {isProcessing ? (
+                    <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  ) : (
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="h-6 w-6"
@@ -113,10 +173,14 @@ export default function LandingPage() {
                             d="M14 5l7 7m0 0l-7 7m7-7H3"
                         />
                     </svg>
+                  )}
                 </button>
             </div>
-            <p className="mt-2 text-sm text-gray-600">
-                {transcriptFile ? 'Now type your initial message and click send.' : 'Upload your transcript and type an initial message.'}
+            {/* Help text / Error message */}
+            <p className="mt-2 text-sm text-gray-600 h-5">
+              {isProcessing ? 'Thinking...' : 
+              error ? <span className="text-red-500">{error}</span> : 
+              'Type your initial message to start.'}
             </p>
         </form>
       </div>
