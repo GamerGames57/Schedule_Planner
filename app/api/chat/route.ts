@@ -9,10 +9,10 @@ async function callLangflow(input: string, sessionId: string) {
   if (!langflowApiKey) throw new Error('LANGFLOW_API_KEY is not set');
 
   const requestPayload = {
-    output_type: "chat",
+    output_type: "text",
     input_type: "text",
-    input_value: input,
-    session_id: sessionId,
+    input_value: input,    
+    session_id: sessionId, 
   };
 
   const response = await fetch(langflowUrl, {
@@ -43,6 +43,7 @@ async function callLangflow(input: string, sessionId: string) {
   }
   return aiReply;
 }
+
 export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get('content-type') || '';
@@ -68,10 +69,8 @@ export async function POST(req: NextRequest) {
       throw new Error('Invalid JSON request: Must provide either chatInput or (messages and sessionId)');
     }
 
-    // Call Langflow with prepared prompt and session ID
     const aiReply = await callLangflow(prompt, sessionId);
 
-    // Return reply and session ID
     return NextResponse.json({
       reply: aiReply,
       sessionId: sessionId,
